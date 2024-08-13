@@ -10,6 +10,8 @@ from scipy.special import logsumexp
 from scipy.optimize import minimize
 from scipy.stats import pearsonr as pearson
 from seaborn import pairplot
+# pyro sampler - importance sampling
+from pyro.infer import Importance
 
 class CollectivePosterior:
        
@@ -81,7 +83,7 @@ class CollectivePosterior:
         cur = 0
         while cur<n_samples:
             samps = self.prior.sample((jump,))
-            probs = self.prior.log_prob(samps)
+            probs = torch.rand(samps.size()[0])
             lp = self.log_prob(samps)
             next_idx = lp > probs
             how_many = next_idx.sum()
@@ -103,7 +105,7 @@ class CollectivePosterior:
         return res
     
     def sample(self, n_samples, jump=int(1e5), keep=True):
-        theta = self.rejection_sample(1,keep=False)[0]
+        theta = self.rejection_sample(1,jump,keep=False)[0]
         samples = torch.empty((n_samples,len(theta)))
         cur = 0
         while cur<n_samples:
@@ -117,6 +119,30 @@ class CollectivePosterior:
         if keep:
             self.samples = samples
         return samples
+    
+    # sample with MCMC with 1 rejection sample as initiator
+    # def sample_mcmc(self, n_samples, keep=True):
+    #     init = self.rejection_sample(1,keep=False)[0]
+    #     print(init)
+    #     samples = torch.empty((n_samples,3))
+    #     samples[0,:] = init
+    #     cand = init
+    #     for i in range(1,n_samples):
+    #         samp = self.sample_around(cand,1)[0]
+    #         log_prob_samp = self.log_prob(samp)
+    #         log_prob_cand = self.log_prob(cand)
+    #         if log_prob_samp > log_prob_cand:
+    #             samples[i,:] = samp
+    #             cand = samp
+    #         else:
+    #             if torch.rand(1) < torch.exp(log_prob_samp - log_prob_cand):
+    #                 samples[i,:] = samp
+    #                 cand = samp
+    #             else:
+    #                 samples[i,:] = cand
+    #     if keep:
+    #         self.samples = samples
+    #     return samples
     
     # get Maximum A-Posteriori (MAP) - distribution's mode
     def get_map(self, keep=True):
