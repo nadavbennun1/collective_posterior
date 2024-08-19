@@ -5,6 +5,8 @@ from inference_utils import get_prior
 import torch
 import pickle
 import time
+from sbi.inference import SNPE, prepare_for_sbi, simulate_for_sbi
+
 
 # time
 start = time.time()
@@ -15,7 +17,12 @@ prior = get_prior(sim)
 simulator = WF
 
 # inference
-posterior = infer(simulator, prior, method='SNPE', num_simulations=10000)
+simulator, prior = prepare_for_sbi(simulator, prior)
+inference = SNPE(prior)
+
+theta, x = simulate_for_sbi(simulator, proposal=prior, num_simulations=100000)
+density_estimator = inference.append_simulations(theta, x).train(training_batch_size=50, stop_after_epochs=100)
+posterior = inference.build_posterior(density_estimator)
 
 # Save the posterior with pickle
 with open(f'posterior_{sim}.pkl', 'wb') as f:

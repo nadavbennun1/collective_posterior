@@ -78,23 +78,35 @@ class CollectivePosterior:
         return np.array(log_probs) #+ float(self.log_C + np.log((1/A)**(1-r))) / r
     
     # Sample from the collective posterior using rejection sampling
-    def rejection_sample(self, n_samples, jump = int(10**5), keep=True):
-        samples = torch.empty((n_samples,3))
-        cur = 0
-        while cur<n_samples:
+#     def rejection_sample(self, n_samples, jump = int(10**5), keep=True):
+#         samples = torch.empty((n_samples,3))
+#         cur = 0
+#         while cur<n_samples:
+#             samps = self.prior.sample((jump,))
+#             probs = torch.rand(samps.size()[0])
+#             lp = self.log_prob(samps)
+#             next_idx = lp > probs
+#             how_many = next_idx.sum()
+#             print(how_many)
+#             if cur+how_many > n_samples:
+#                 how_many = n_samples-cur-1
+#             if how_many>0:
+#                 samples[cur:cur+how_many,:] = samps[next_idx]
+#                 cur += how_many
+#         if keep:
+#             self.samples = samples
+#         return samples
+    
+    def sample_one(self, jump=int(10**5), keep=True):
+        sampled=False
+        while not(sampled):
             samps = self.prior.sample((jump,))
             probs = torch.rand(samps.size()[0])
             lp = self.log_prob(samps)
             next_idx = lp > probs
-            how_many = next_idx.sum()
-            if cur+how_many > n_samples:
-                how_many = n_samples-cur-1
-            if how_many>0:
-                samples[cur:cur+how_many,:] = samps[next_idx]
-                cur += how_many
-        if keep:
-            self.samples = samples
-        return samples
+            if next_idx.sum()>0:
+                sampled=True
+        return samps[next_idx][0]
     
     def sample_around(self, theta, jump):
         dist =  torch.distributions.multivariate_normal.MultivariateNormal(theta, torch.diag(torch.tensor([0.05,0.05,0.05])))
@@ -105,7 +117,7 @@ class CollectivePosterior:
         return res
     
     def sample(self, n_samples, jump=int(1e5), keep=True):
-        theta = self.rejection_sample(1,jump,keep=False)[0]
+        theta = self.sample_one(jump,keep=False)
         samples = torch.empty((n_samples,len(theta)))
         cur = 0
         while cur<n_samples:

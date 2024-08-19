@@ -20,7 +20,7 @@ max_num_trials = 10
 
 # construct training data set: we want to cover the full range of possible number of
 # trials
-num_training_samples = 10000
+num_training_samples = 12500
 theta = prior.sample((num_training_samples,))
 
 # there are certainly smarter ways to construct the training data set, but we go with a
@@ -70,7 +70,7 @@ inference.append_simulations(
     theta,
     x,
     exclude_invalid_x=False,
-).train(training_batch_size=1000)
+).train(training_batch_size=50, stop_after_epochs=100)
 posterior = inference.build_posterior()
 
 # Save the posterior with pickle
