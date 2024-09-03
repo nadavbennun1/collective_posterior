@@ -1,6 +1,6 @@
 import sbibm
 
-task = sbibm.  # See sbibm.get_available_tasks() for all tasks
+task = sbibm.get_task('lotka_voltera') # See sbibm.get_available_tasks() for all tasks
 prior = task.get_prior()
 simulator = task.get_simulator()
 observation = task.get_observation(num_observation=1)  # 10 per task
