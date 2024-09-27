@@ -12,11 +12,10 @@ from seaborn import pairplot
 
 class CollectivePosterior:
        
-    def __init__(self, prior, amortized_posterior, Xs, n_eval, log_C, epsilon):
+    def __init__(self, prior, amortized_posterior, Xs, log_C, epsilon):
         self.prior = prior # inference prior
         self.amortized_posterior = amortized_posterior
         self.Xs = Xs # Observations
-        self.n_eval = n_eval # Granularity
         self.log_C = log_C # Normalizing constant, can be re-calculated using get_log_C
         self.epsilon = epsilon # Sensitivity, minimal reported value for a single observation by the amortized posterior
         self.map = None
@@ -216,9 +215,9 @@ class CollectivePosterior:
         return g
     
     def get_log_C(self, samples=int(1e5)):
-        lens = torch.tensor([float(self.prior.base_dist.high[i])-float(self.prior.base_dist.low[i]) for i in range(len(self.prior.base_dist.high))]) # Prior dimensions
-        A = torch.prod(lens) # Prior volume
-        dt = A / (self.n_eval**self.theta_dim) # granularity
+        loglens = torch.log(torch.tensor([float(self.prior.base_dist.high[i])-float(self.prior.base_dist.low[i]) for i in range(len(self.prior.base_dist.high))])) # Prior dimensions
+        logA = loglens.sum() # Prior volume
+        log_dt = logA - torch.log(torch.tensor(samples)) # granularity
         eps = torch.tensor(self.epsilon, dtype=torch.float32)
         r = len(self.Xs)
         log_probs = torch.empty((samples, r))
@@ -227,52 +226,7 @@ class CollectivePosterior:
             g = self.prior.sample((samples,))
             for i in range(r):
                 log_probs[:,i] = torch.max(self.amortized_posterior.set_default_x(self.Xs[i,:]).log_prob(g), eps)
-            res.append(-1*torch.logsumexp(torch.sum(log_probs,-1)+ torch.log(dt) + torch.log((1/A)**(1-r)),0))
+            res.append(-1*torch.logsumexp(torch.sum(log_probs,-1)+ log_dt -(1-r)*logA ,0))
         self.log_C = torch.tensor(res).min()
         return self.log_C
         
-        
-        
-#         def get_grid(posterior, x, n, epsilon):
-#             # Explored space
-#             s = np.linspace(self.prior.base_dist.low[0], self.prior.base_dist.high[0], n)
-#             m = np.linspace(self.prior.base_dist.low[1], self.prior.base_dist.high[1], n)
-#             p = np.linspace(self.prior.base_dist.low[2], self.prior.base_dist.high[2], n)
-
-#             # Change to IMP posterior to sample more efficiently
-#             potential_fn = self.amortized_posterior.potential_fn
-#             posterior_imp = ImportanceSamplingPosterior(potential_fn, proposal = self.prior)
-
-#             # Create empty grid
-#             grd = torch.tensor([[[[s_,m_,p_,0] for s_ in s] for m_ in m] for p_ in p], dtype=torch.float32).reshape(n**3,4)
-#             grd[:,3] = posterior_imp.log_prob(x=x,theta=grd[:,0:3])
-#             grd[:,3] = grd[:,3].apply_(lambda x: max(epsilon,x))
-#             return grd
-        
-#         x = self.Xs
-#         r = len(x)
-#         # get probs for first
-#         rim = get_grid(self.amortized_posterior, x.iloc[0,:], self.n_eval,self.epsilon)
-#         prod_df = pd.DataFrame(columns = ['log_s','log_m','log_p'] + list(x.index)+['sum_logs'], index=[i for i in range(len(rim))])
-#         prod_df.iloc[:,0:3] = rim[:,0:3]
-#         prod_df.iloc[:,3] = rim[:,3]
-#         # insert other replicates to df
-#         for i in range(1,len(x)):
-#             x_0 = x.iloc[i,:]
-#             prod_df.iloc[:,3+i] = get_grid(self.amortized_posterior,x_0,self.n_eval,self.epsilon)[:,3]
-#         # Column of sum of log-posteriors = log(product of posteriors)
-#         prod_df.loc[:,'sum_logs'] = prod_df.loc[:,list(x.index)].sum(axis=1)
-
-#         # Calculate constants for the integral
-#         lens = np.array([float(self.prior.base_dist.high[i])-float(self.prior.base_dist.low[i]) for i in range(len(self.prior.base_dist.high))]) # Prior dimensions
-#         A = np.prod(lens) # Prior volume
-#         dt = A / (self.n_eval**3) # granularity
-
-#         # Obtain C using integral (approximated by Riemann sum)
-
-#         # log(integrand) = log(product of posteriors * prior^(1-n) * dt)
-#         prod_df['adj_sum_logs'] = prod_df['sum_logs'] + np.log(dt) + np.log((1/A)**(1-r))
-#         # Riemann sum (minus -> inverse)
-#         log_C = -1*logsumexp(prod_df['adj_sum_logs'].astype('float'))
-#         self.log_C = log_C
-#         return log_C
