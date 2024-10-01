@@ -1,11 +1,12 @@
 # inference with NPE
-from simulators import WF_wrapper, GLU_wrapper
+from simulators import WF_wrapper, GLU_wrapper, SLCP_wrapper
 from sbi.inference import NPE
-from inference_utils import get_prior
+from sbi.utils import BoxUniform
 import torch
 import pickle
 from time import time
 import argparse
+import sbibm
 
 # time
 start = time()
@@ -18,12 +19,26 @@ parser.add_argument('-e', "--epochs")
 parser.add_argument('-n', "--num_sim")
 args = parser.parse_args()
 
+# Define the prior
+def get_prior(sim):
+    if sim == 'WF':
+        prior = BoxUniform(low=torch.tensor([-2, -7, -8]), high=torch.tensor([0, -2, -2]))
+    elif sim == 'GLU':
+        prior = sbibm.get_task('gaussian_linear_uniform').get_prior_dist()
+    elif sim == 'SLCP':
+        prior = sbibm.get_task('slcp').get_prior_dist()
+    else:
+        raise ValueError('Unknown simulator')
+
+    return prior
+
+
 sim = str(args.model)
 stop_after_epochs = int(args.epochs)
 num_sim = int(args.num_sim)
 
 prior = get_prior(sim)
-model_dict = {'GLU': GLU_wrapper, 'WF': WF_wrapper}
+model_dict = {'GLU': GLU_wrapper, 'WF': WF_wrapper, 'SLCP': SLCP_wrapper}
 simulator = model_dict[sim]
 
 
@@ -36,7 +51,7 @@ theta = prior.sample((num_training_samples,))
 
 # there are certainly smarter ways to construct the training data set, but we go with a
 # for loop here for illustration purposes.
-theta_dim_dict = {'GLU': 10, 'WF': 12} 
+theta_dim_dict = {'GLU': 10, 'WF': 12, 'SLCP': 8} 
 theta_dim = theta_dim_dict[sim]
 
 x = torch.ones(num_training_samples * max_num_trials, max_num_trials, theta_dim) * float(
@@ -87,7 +102,7 @@ inference.append_simulations(
 posterior = inference.build_posterior()
 
 # Save the posterior with pickle
-with open(f'{sim}/posterior_iid_{sim}_{num_sim}_{stop_after_epochs}.pkl', 'wb') as f:
+with open(f'{sim}/posteriors/posterior_iid_{sim}_{num_sim}_{stop_after_epochs}.pkl', 'wb') as f:
     pickle.dump(posterior, f)
 
 # time

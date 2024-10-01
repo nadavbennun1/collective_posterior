@@ -6,6 +6,7 @@ import sbibm
 # constants
 N = int(1e7)
 generation = np.array([8, 21, 29, 37, 50, 58, 66, 79, 87, 95, 108, 116]) # from Chuong et al 2024
+        
 
 def WF(parameters, seed=None):
     """ CNV evolution simulator
@@ -89,11 +90,8 @@ def WF_wrapper(reps, parameters, seed=None):
         evo_reps[i,:] = out
     return evo_reps
 
-
-### GLU ###
-task = sbibm.get_task('gaussian_linear_uniform') # See sbibm.get_available_tasks() for all tasks
-
-glu_simulator = task.get_simulator()
+glu_task = sbibm.get_task('gaussian_linear_uniform')
+glu_simulator = glu_task.get_simulator()
 
 def GLU(parameters):
     return glu_simulator(parameters)
@@ -104,3 +102,19 @@ def GLU_wrapper(reps, parameters):
         out=GLU(parameters)
         glu_reps[i,:] = out
     return glu_reps
+
+
+### SLCP ###
+slcp_task = sbibm.get_task('slcp') # See sbibm.get_available_tasks() for all tasks
+
+slcp_simulator = slcp_task.get_simulator()
+
+def SLCP(parameters):
+    return slcp_simulator(parameters)
+
+def SLCP_wrapper(reps, parameters):
+    slcp_reps = torch.empty(reps, 8)
+    for i in range(reps):
+        out=SLCP(parameters)[0]
+        slcp_reps[i,:] = out
+    return slcp_reps
