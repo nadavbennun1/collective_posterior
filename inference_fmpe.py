@@ -3,7 +3,7 @@ from simulators import WF, GLU, SLCP
 import torch
 import pickle
 import time
-from sbi.inference import NPE, simulate_for_sbi
+from sbi.inference import FMPE, simulate_for_sbi
 from sbi.utils import BoxUniform
 import argparse
 import sbibm
@@ -54,15 +54,17 @@ prior, num_parameters, prior_returns_numpy = process_prior(prior)
 simulator = process_simulator(simulator, prior, prior_returns_numpy)
 
 # inference
-inference = NPE(prior)
+inference = FMPE(prior)
 theta, x = simulate_for_sbi(simulator, proposal=prior, num_simulations=num_sim)
 density_estimator = inference.append_simulations(theta, x).train(stop_after_epochs=stop_after_epochs)
 posterior = inference.build_posterior(density_estimator)
 
 # Save the posterior with pickle
-with open(f'{sim}/posteriors/posterior_{sim}_{num_sim}_{stop_after_epochs}.pkl', 'wb') as f:
+with open(f'{sim}/posteriors/posterior_fmpe_{sim}_{num_sim}_{stop_after_epochs}.pkl', 'wb') as f:
     pickle.dump(posterior, f)
 
 # time
 end = time.time()
 print(f'Inference time: {end - start} seconds')
+
+
