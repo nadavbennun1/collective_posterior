@@ -76,20 +76,19 @@ class CollectivePosterior:
     
     # Sample from the collective posterior using rejection sampling
     def rejection_sample(self, n_samples, jump = int(10**4), keep=True):
-        samples = torch.empty((n_samples,self.theta_dim))
+        samples = torch.empty((1,self.theta_dim))
         cur = 0
-        while cur<n_samples:
+        while cur<n_samples+1:
             samps = self.prior.sample((jump,))
             probs = torch.rand(samps.size()[0])
             lp = self.log_prob(samps)
             next_idx = lp > probs
-            how_many = min(next_idx.sum(), n_samples-cur)
-            if how_many > 0:
-                samples[cur:cur+how_many,:] = samps[next_idx]
-                cur += how_many
-        if keep:
-            self.samples = samples
-        return samples
+            samples_to_add = samps[next_idx]
+            samples = torch.cat([samples, samples_to_add])
+            cur += next_idx.sum()
+            if keep:
+                self.samples = samples[1:n_samples]
+        return samples[1:n_samples]
     
     def sample_one(self, jump=int(10**5), keep=True):
         sampled=False
