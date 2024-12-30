@@ -1,12 +1,18 @@
 # inference with NPE
 from simulators import WF_wrapper, GLU_wrapper, SLCP_wrapper
-from sbi.inference import NPE
 from sbi.utils import BoxUniform
 import torch
 import pickle
 from time import time
 import argparse
 import sbibm
+from sbi.inference import NPE, simulate_for_sbi
+
+from sbi.utils.user_input_checks import (
+    check_sbi_inputs,
+    process_prior,
+    process_simulator,
+)
 
 # time
 start = time()
@@ -43,6 +49,7 @@ simulator = model_dict[sim]
 
 
 max_num_trials = 10
+  
 
 # construct training data set: we want to cover the full range of possible number of
 # trials
@@ -51,10 +58,10 @@ theta = prior.sample((num_training_samples,))
 
 # there are certainly smarter ways to construct the training data set, but we go with a
 # for loop here for illustration purposes.
-theta_dim_dict = {'GLU': 10, 'WF': 12, 'SLCP': 8} 
-theta_dim = theta_dim_dict[sim]
+x_dim_dict = {'GLU': 10, 'WF': 12, 'SLCP': 8} 
+x_dim = x_dim_dict[sim]
 
-x = torch.ones(num_training_samples * max_num_trials, max_num_trials, theta_dim) * float(
+x = torch.ones(num_training_samples * max_num_trials, max_num_trials, x_dim) * float(
     "nan"
 )
 for i in range(num_training_samples):
@@ -74,7 +81,7 @@ from sbi.utils import posterior_nn
 # embedding
 latent_dim = 10
 single_trial_net = FCEmbedding(
-    input_dim=theta_dim,
+    input_dim=x_dim,
     num_hiddens=40,
     num_layers=2,
     output_dim=latent_dim,

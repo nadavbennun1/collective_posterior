@@ -9,6 +9,7 @@ from scipy.special import logsumexp
 from scipy.optimize import minimize
 from scipy.stats import pearsonr as pearson
 from seaborn import pairplot
+from time import time
 
 class CollectivePosterior:
        
@@ -103,6 +104,7 @@ class CollectivePosterior:
         Returns:
             torch.Tensor: Samples from the target distribution.
         """
+        t = time()
         samples = []
         while len(samples) < num_samples:
             # Sample from the proposal distribution
@@ -117,10 +119,10 @@ class CollectivePosterior:
             accs = proposal[torch.rand(jump).log() < log_acceptance_prob]
             if len(accs) > 0:
                 samples.append(accs)
-
+        print(time()-t)
         return torch.cat(samples)
 
-    def sample_one(self, jump=int(1e4), keep=True):
+    def sample_one(self, jump=int(10**4), keep=True):
         sampled=False
         while not(sampled):
             samps = self.prior.sample((jump,))
@@ -131,21 +133,20 @@ class CollectivePosterior:
                 sampled=True
         return samps[next_idx][0]
     
-    def sample_around(self, theta, jump=int(1e4)):
-        dist =  torch.distributions.multivariate_normal.MultivariateNormal(theta, torch.diag(torch.tensor([0.05]*self.theta_dim)))
+    def sample_around(self, theta, jump=int(1e4), scale=0.05):
+        dist =  torch.distributions.multivariate_normal.MultivariateNormal(theta, torch.diag(torch.tensor([scale]*self.theta_dim)))
         cands = dist.sample((jump,))
         probs = self.log_prob(cands)
         baseline = torch.rand((len(cands),))
         res = cands[probs>baseline]
-        new_theta = cands[probs.argmax()]
-        return res, new_theta
+        return res
     
-    def sample(self, n_samples, jump=int(1e4), keep=True):
+    def sample(self, n_samples, jump=int(1e4), keep=True, scale=0.05):
         theta = self.sample_one(jump,keep=False)
         samples = torch.empty((n_samples,len(theta)))
         cur = 0
         while cur<n_samples:
-            samps, theta = self.sample_around(theta,jump)
+            samps = self.sample_around(theta,jump,scale=scale)
             how_many = len(samps)
             if cur+how_many > n_samples:
                 how_many = n_samples-cur
@@ -157,7 +158,7 @@ class CollectivePosterior:
         return samples
     
     
-    def sample_mcmc(self,num_samples, step_size, burn_in=1000):
+    def sample_mcmc_lang(self,num_samples, step_size, burn_in=1000):
         """
         MCMC sampler using the Metropolis-Hastings algorithm.
 
@@ -172,9 +173,10 @@ class CollectivePosterior:
             torch.Tensor: Samples from the target distribution.
         """
         # Initialize
-        init_samples = self.prior.sample((burn_in,))
-        init_probs = self.log_prob(init_samples)
-        initial_theta = init_samples[init_probs.argmax()]
+        # init_samples = self.prior.sample((burn_in,))
+        # init_probs = self.log_prob(init_samples)
+        # initial_theta = init_samples[init_probs.argmax()]
+        initial_theta = self.sample_one()
         theta = initial_theta.clone()
         samples = []
 
@@ -187,15 +189,17 @@ class CollectivePosterior:
             proposal_log_prob = self.log_prob(proposal)
 
             # Compute the acceptance probability
-            acceptance_prob = torch.exp(proposal_log_prob - current_log_prob)
-
+            acceptance_prob = proposal_log_prob - current_log_prob
+            
+            print(torch.log(torch.rand(1)), acceptance_prob)
             # Accept or reject the proposal
-            if torch.rand(1).item() < acceptance_prob.item():
-                theta = proposal
+            if torch.log(torch.rand(1)) < acceptance_prob.item():
+                theta = proposal + torch.normal(0,0.01,size=(1,theta.size(0)))
 
             # Save the sample if we're past the burn-in period
             if i >= burn_in:
                 samples.append(theta.clone())
+            print(samples)
 
         return torch.stack(samples)
 
@@ -288,7 +292,7 @@ class CollectivePosterior:
                
         return g
     
-    def get_log_C(self, samples=int(1e5), n_reps = 10):
+    def get_log_C(self, samples=int(1e5), n_reps=5):
         loglens = torch.log(torch.tensor([float(self.prior.base_dist.high[i])-float(self.prior.base_dist.low[i]) for i in range(len(self.prior.base_dist.high))])) # Prior dimensions
         logA = loglens.sum() # Prior volume
         log_dt = logA - torch.log(torch.tensor(samples)) # granularity
@@ -304,22 +308,85 @@ class CollectivePosterior:
         self.log_C = torch.tensor(res).mean()
         return self.log_C
         
-    def get_log_C_adaptive(self, samples = 1000, n_reps = 10, n_rounds = 3, n_sample_each_round = 100):
-        for _ in range(n_rounds):
-            init_log_c = self.get_log_C(samples, n_reps)
-            round_samps = self.sample(n_sample_each_round, keep=False)
-            print(round_samps.max(0)[0], round_samps.min(0)[0])
-            loglens = torch.log(round_samps.max(0)[0] - round_samps.min(0)[0]) # round's lengths
-            logA = loglens.sum() # round's volume
-            log_dt = logA - torch.log(torch.tensor(n_sample_each_round)) # round's granularity
-            eps = torch.tensor(self.epsilon, dtype=torch.float32)
-            r = len(self.Xs)
-            log_probs = torch.empty((n_sample_each_round, r))
-            res = []
-            for k in range(n_reps):
-                for i in range(r):
-                    log_probs[:,i] = torch.max(self.amortized_posterior.set_default_x(self.Xs[i,:]).log_prob(round_samps), eps)
-                res.append(-1*torch.logsumexp(torch.sum(log_probs,-1)+ log_dt -(1-r)*logA ,0))
-            self.log_C = torch.tensor(res).mean()
-            print(self.log_C)
-        return self.log_C
+        
+    def sample_around_(self, theta, jump=int(1e4), scale=0.5):
+        dist =  torch.distributions.multivariate_normal.MultivariateNormal(theta, torch.diag(torch.tensor([scale]*self.theta_dim)))
+        cands = dist.sample((jump,))
+        probs = self.log_prob(cands)
+        baseline = torch.rand((len(cands),))
+        res = cands[probs>baseline]
+        new_theta = cands[probs.argmax()]
+        return res, new_theta
+    
+    def sample_(self, n_samples, jump=int(1e4), keep=True, scale=0.05):
+        theta = self.sample_one(jump,keep=False)
+        samples = torch.empty((n_samples,len(theta)))
+        cur = 0
+        while cur<n_samples:
+            samps, theta = self.sample_around_(theta,jump,scale=scale)
+            how_many = len(samps)
+            if cur+how_many > n_samples:
+                how_many = n_samples-cur
+            if how_many>0:
+                samples[cur:cur+how_many,:] = samps[:how_many,:]
+                cur += how_many
+        if keep:
+            self.samples = samples
+        return samples
+    
+
+        
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import math
+import pickle
+import sbi.utils as utils
+import torch
+from sbi.inference import MCMCPosterior
+from scipy.special import logsumexp
+from seaborn import histplot
+
+import sys  
+sys.path.insert(1, '../')
+from simulators import WF, WF_wrapper
+generation = np.array(pd.read_csv('WF/empirical_data/Chuong_116_gens.txt').columns.astype('int'))
+
+
+def simulator(parameters):
+    X = WF_wrapper(parameters=parameters, seed=None, reps=10) \
+    # + np.random.normal(0,0.01,(10,12))
+    for i in range(len(X)):
+        for j in range(len(X[i])):
+            if X[i,j] > 1:
+                X[i,j] = 1
+            if X[i,j] < 0:
+                X[i,j] = 0
+    return X
+
+th = torch.tensor([-0.74,-4.84,-4.32], dtype=torch.float32)
+X = simulator(th.numpy()) # LTRΔ MAP in paper
+
+    
+prior_min = np.log10(np.array([1e-2,1e-7,1e-8]))
+prior_max = np.log10(np.array([1,1e-2,1e-2]))
+prior = utils.BoxUniform(low=torch.tensor(prior_min), 
+                         high=torch.tensor(prior_max))
+posterior_chuong = pickle.load(open('WF/posteriors/posterior_WF_100000_100.pkl', 'rb'))
+epsilon = -15000
+Xs = torch.tensor(X, dtype=torch.float32)
+op = CollectivePosterior(prior, posterior_chuong, Xs, 1, epsilon)
+
+t = time()
+print(op.get_log_C(), time()-t)
+t = time()
+op.amortized_posterior.set_default_x(Xs[0])
+
+# print(op.amortized_posterior.posterior_estimator.net._mean)
+
+plt.hist(op.sample(200, keep=False)[:,0])
+print(time()-t)
+t = time()
+plt.hist(op.sample_(200)[:,0], alpha=0.2)
+print(time()-t)
+plt.show()
