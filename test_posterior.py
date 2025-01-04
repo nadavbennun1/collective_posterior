@@ -38,14 +38,14 @@ c = args.cp
 posterior = pickle.load(open(posterior_dir, 'rb'))
 
 # Load the test thetas
-thetas = pd.read_csv(thetas_dir, header=None).values
+thetas = torch.tensor(pd.read_csv(thetas_dir, index_col=0).values)
 
 def evaluate_cp(posterior, thetas, samples):
     accus = torch.empty(thetas.shape)
     covs = torch.empty(len(thetas),1)
     for i in range(len(thetas)):
-        cp = CollectivePosterior(prior=get_prior(sim), amortized_posterior=posterior, log_C=1, Xs=simulator(10, thetas[i]))
-        cp.get_log_C()
+        X = simulator(10, thetas[i])
+        cp = CollectivePosterior(prior=get_prior(sim), amortized_posterior=posterior, log_C=1, Xs=X, epsilon=-150)
         samples = cp.sample(samples)
         params = torch.tensor(thetas[i,:], dtype=torch.float32)
         accus[i] = samples.mean(0)-params
@@ -58,17 +58,18 @@ def evaluate_iid(posterior, thetas, samples):
     accus = torch.empty(thetas.shape)
     covs = torch.empty(len(thetas),1)
     for i in range(len(thetas)):
-        samples = posterior.set_default_x(simulator(10, thetas[i])).sample((samples,))
+        X = simulator(10, thetas[i])
+        samples = posterior.set_default_x(X).sample((samples,))
         params = torch.tensor(thetas[i,:], dtype=torch.float32)
         accus[i] = samples.mean(0)-params
         covs[i] = (posterior.log_prob(samples) > posterior.log_prob(params)).sum()/len(thetas)
         print(i, accus[i], covs[i])
     return accus, covs
 
-func = evaluate_cp if c else evaluate_iid
+eval_func = evaluate_cp if c else evaluate_iid
 
-accus, covs = func(posterior, thetas, samples)
+accus, covs = eval_func(posterior, thetas, samples)
 accus = accus.detach().numpy()
 covs = covs.detach().numpy()
-np.save('accus.npy', accus)
-np.save('covs.npy', covs)
+np.save(f'{model}/tests/accus_{posterior_dir}.npy', accus)
+np.save(f'{model}/tests/covs_{posterior_dir}.npy', covs)
