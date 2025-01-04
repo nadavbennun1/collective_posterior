@@ -38,7 +38,7 @@ c = args.cp
 posterior = pickle.load(open(posterior_dir, 'rb'))
 
 # Load the test thetas
-thetas = torch.tensor(pd.read_csv(thetas_dir, index_col=0).values)
+thetas = torch.tensor(pd.read_csv(thetas_dir, index_col=0).values.astype('float'), dtype=torch.float32)
 
 def evaluate_cp(posterior, thetas, n_samples):
     accus = torch.empty(thetas.shape)

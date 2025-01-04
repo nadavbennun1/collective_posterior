@@ -11,6 +11,11 @@ def get_prior(sim):
         prior_min = torch.tensor([-1]*theta_dim, dtype=torch.float32)
         prior_max = torch.tensor([1]*theta_dim, dtype=torch.float32)
         prior = BoxUniform(low=prior_min, high=prior_max)
+    elif sim == 'SLCP':
+        theta_dim = 5
+        prior_min = torch.tensor([-3]*theta_dim, dtype=torch.float32)
+        prior_max = torch.tensor([3]*theta_dim, dtype=torch.float32)
+        prior = BoxUniform(low=prior_min, high=prior_max)
     else:
         raise ValueError('Unknown simulator')
 
