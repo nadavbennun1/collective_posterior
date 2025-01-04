@@ -40,36 +40,39 @@ posterior = pickle.load(open(posterior_dir, 'rb'))
 # Load the test thetas
 thetas = torch.tensor(pd.read_csv(thetas_dir, index_col=0).values)
 
-def evaluate_cp(posterior, thetas, samples):
+def evaluate_cp(posterior, thetas, n_samples):
     accus = torch.empty(thetas.shape)
     covs = torch.empty(len(thetas),1)
     for i in range(len(thetas)):
         X = simulator(10, thetas[i])
         cp = CollectivePosterior(prior=get_prior(sim), amortized_posterior=posterior, log_C=1, Xs=X, epsilon=-150)
-        samples = cp.sample(samples)
+        samples = cp.sample(n_samples)
         params = torch.tensor(thetas[i,:], dtype=torch.float32)
         accus[i] = samples.mean(0)-params
         covs[i] = (cp.log_prob(samples) > cp.log_prob(params)).sum()/len(thetas)
-        print(i, accus[i], covs[i])
+        if i%10 == 9:
+          print(f'{round(100*(i+1)/len(thetas),2)}%')
     return accus, covs
 
 
-def evaluate_iid(posterior, thetas, samples):
+def evaluate_iid(posterior, thetas, n_samples):
     accus = torch.empty(thetas.shape)
     covs = torch.empty(len(thetas),1)
     for i in range(len(thetas)):
         X = simulator(10, thetas[i])
-        samples = posterior.set_default_x(X).sample((samples,))
+        samples = posterior.set_default_x(X).sample((n_samples,))
         params = torch.tensor(thetas[i,:], dtype=torch.float32)
         accus[i] = samples.mean(0)-params
         covs[i] = (posterior.log_prob(samples) > posterior.log_prob(params)).sum()/len(thetas)
-        print(i, accus[i], covs[i])
+        if i%10 == 1:
+          print(f'{round(100*i/len(thetas),2)}%')
     return accus, covs
 
 eval_func = evaluate_cp if c else evaluate_iid
+add_iid = '' if c else '_iid'
 
-accus, covs = eval_func(posterior, thetas, samples)
+accus, covs = eval_func(posterior, thetas, n_samples=samples)
 accus = accus.detach().numpy()
 covs = covs.detach().numpy()
-np.save(f'{model}/tests/accus_{posterior_dir}.npy', accus)
-np.save(f'{model}/tests/covs_{posterior_dir}.npy', covs)
+pd.DataFrame(accus).to_csv(f'{sim}/tests/accus_{sim}{add_iid}.csv')
+pd.DataFrame(covs).to_csv(f'{sim}/tests/covs_{sim}{add_iid}.csv')
