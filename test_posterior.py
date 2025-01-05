@@ -45,7 +45,7 @@ def evaluate_cp(posterior, thetas, n_samples):
     covs = torch.empty(len(thetas),1)
     for i in range(len(thetas)):
         X = simulator(10, thetas[i])
-        cp = CollectivePosterior(prior=get_prior(sim), amortized_posterior=posterior, log_C=1, Xs=X, epsilon=-150)
+        cp = CollectivePosterior(prior=get_prior(sim), amortized_posterior=posterior, log_C=1, Xs=X, epsilon=-10000)
         samples = cp.sample(n_samples)
         params = torch.tensor(thetas[i,:], dtype=torch.float32)
         accus[i] = samples.mean(0)-params
