@@ -49,7 +49,7 @@ def evaluate_cp(posterior, thetas, n_samples):
         samples = cp.sample(n_samples)
         params = torch.tensor(thetas[i,:], dtype=torch.float32)
         accus[i] = samples.mean(0)-params
-        covs[i] = (cp.log_prob(samples) > cp.log_prob(params)).sum()/len(thetas)
+        covs[i] = (cp.log_prob(samples) > cp.log_prob(params)).sum()/n_samples
         if i%10 == 9:
           print(f'{round(100*(i+1)/len(thetas),2)}%')
     return accus, covs
