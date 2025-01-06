@@ -45,11 +45,13 @@ def evaluate_cp(posterior, thetas, n_samples):
     covs = torch.empty(len(thetas),1)
     for i in range(len(thetas)):
         X = simulator(10, thetas[i])
-        cp = CollectivePosterior(prior=get_prior(sim), amortized_posterior=posterior, log_C=1, Xs=X, epsilon=-10000)
+        cp = CollectivePosterior(prior=get_prior(sim), amortized_posterior=posterior, log_C=1, Xs=X, epsilon=-150)
+        cp.get_log_C()
         samples = cp.sample(n_samples)
         params = torch.tensor(thetas[i,:], dtype=torch.float32)
         accus[i] = samples.mean(0)-params
         covs[i] = (cp.log_prob(samples) > cp.log_prob(params)).sum()/n_samples
+        print(i)
         if i%10 == 9:
           print(f'{round(100*(i+1)/len(thetas),2)}%')
     return accus, covs
@@ -74,5 +76,5 @@ add_iid = '' if c else '_iid'
 accus, covs = eval_func(posterior, thetas, n_samples=samples)
 accus = accus.detach().numpy()
 covs = covs.detach().numpy()
-pd.DataFrame(accus).to_csv(f'{sim}/tests/accus_{sim}{add_iid}_100e.csv')
-pd.DataFrame(covs).to_csv(f'{sim}/tests/covs_{sim}{add_iid}_100e.csv')
+pd.DataFrame(accus).to_csv(f'{sim}/tests/accus_{sim}{add_iid}.csv')
+pd.DataFrame(covs).to_csv(f'{sim}/tests/covs_{sim}{add_iid}.csv')
