@@ -74,5 +74,5 @@ add_iid = '' if c else '_iid'
 accus, covs = eval_func(posterior, thetas, n_samples=samples)
 accus = accus.detach().numpy()
 covs = covs.detach().numpy()
-pd.DataFrame(accus).to_csv(f'{sim}/tests/accus_{sim}{add_iid}.csv')
-pd.DataFrame(covs).to_csv(f'{sim}/tests/covs_{sim}{add_iid}.csv')
+pd.DataFrame(accus).to_csv(f'{sim}/tests/accus_{sim}{add_iid}_100e.csv')
+pd.DataFrame(covs).to_csv(f'{sim}/tests/covs_{sim}{add_iid}_100e.csv')
