@@ -82,6 +82,19 @@ def WF(parameters, seed=None):
     
     return torch.tensor(np.transpose(p_cnv)[generation.astype(int)])
 
+def wrapper(simulator, reps, parameters, seed=None):
+    evo_reps = torch.empty(reps, len(generation))
+    for i in range(reps):
+        out=simulator(parameters, seed=seed)
+        evo_reps[i,:] = out
+    return evo_reps
+
+def wrapper_hierarchical(simulator, reps, parameters, var=0.02, seed=None):
+    evo_reps = torch.empty(reps, len(generation))
+    for i in range(reps):
+        out=simulator(parameters+torch.normal(0, torch.abs(var*parameters)), seed=seed)
+        evo_reps[i,:] = out
+    return evo_reps
 
 def WF_wrapper(reps, parameters, seed=None):
     evo_reps = torch.empty(reps, len(generation))
@@ -89,6 +102,7 @@ def WF_wrapper(reps, parameters, seed=None):
         out=WF(parameters, seed=seed)
         evo_reps[i,:] = out
     return evo_reps
+
 
 glu_task = sbibm.get_task('gaussian_linear_uniform')
 glu_simulator = glu_task.get_simulator()

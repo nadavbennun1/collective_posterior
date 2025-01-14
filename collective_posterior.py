@@ -21,6 +21,7 @@ class CollectivePosterior:
         self.map = None
         self.samples = []
         self.theta_dim = len(prior.base_dist.low)
+        self.n_eval = int(1e5)
     
     # Evaluate the collective posterior's log probability for a specific parameter set
     def log_prob(self, theta):
@@ -47,32 +48,11 @@ class CollectivePosterior:
         log_probs = torch.empty((theta_size,r))
         for i in range(r):
             log_probs[:,i] = torch.max(eps,posterior.set_default_x(self.Xs[i,:]).log_prob(theta))
-        lens = self.prior.base_dist.high - self.prior.base_dist.low # Prior dimensions
-        A = torch.prod(lens) # Prior volume3
-        return log_probs.sum(axis=1) + self.log_C - (1-r)*torch.log(A) # log rules
+
+        logpr = self.prior.log_prob(theta)
+        return log_probs.sum(axis=1) + self.log_C - (1-r)*logpr # log rules
     
     
-    def individual_log_probs(self, theta):
-        # get number of reps
-        r = len(self.Xs)
-
-        # switch to MCMC-posterior for faster calculations
-        potential_fn = self.amortized_posterior.potential_fn
-        posterior_imp = ImportanceSamplingPosterior(potential_fn, proposal = self.prior)
-        
-        # epsilon must be a tensor
-        eps = torch.tensor(self.epsilon)
-        if type(theta) != type(torch.tensor(4.2)):
-            theta = torch.tensor(theta, dtype=torch.float32)
-        if len(theta.size()) > 1:
-            t = theta.size()[0]
-            eps = torch.tensor([eps for i in range(t)])
-
-        # Get log_prob value
-        log_probs = [float(posterior_imp.set_default_x(self.Xs[i,:]).log_prob(theta)) for i in range(r)]
-        lens = np.array([float(self.prior.base_dist.high[i])-float(self.prior.base_dist.low[i]) for i in range(len(self.prior.base_dist.high))]) # Prior dimensions
-        A = np.prod(lens) # Prior volume
-        return np.array(log_probs) #+ float(self.log_C + np.log((1/A)**(1-r))) / r
     
     # Sample from the collective posterior using rejection sampling
     def rejection_sample(self, n_samples, jump = int(10**5), keep=True):
@@ -288,38 +268,40 @@ class CollectivePosterior:
                
         return g
     
-    def get_log_C(self, samples=int(1e5), n_reps = 10):
-        loglens = torch.log(torch.tensor([float(self.prior.base_dist.high[i])-float(self.prior.base_dist.low[i]) for i in range(len(self.prior.base_dist.high))])) # Prior dimensions
-        logA = loglens.sum() # Prior volume
-        log_dt = logA - torch.log(torch.tensor(samples)) # granularity
+    def get_log_C(self, n_reps = 10):
+        # loglens = torch.log(torch.tensor([float(self.prior.base_dist.high[i])-float(self.prior.base_dist.low[i]) for i in range(len(self.prior.base_dist.high))])) # Prior dimensions
+        # logA = loglens.sum() # Prior volume
+        # log_dt = logA - torch.log(torch.tensor(samples)) # granularity
         eps = torch.tensor(self.epsilon, dtype=torch.float32)
         r = len(self.Xs)
-        log_probs = torch.empty((samples, r))
+        log_probs = torch.empty((self.n_eval, r))
         res = []
+        logdt = torch.log(torch.tensor(self.n_eval, dtype=torch.float32))
         for k in range(n_reps):
-            g = self.prior.sample((samples,))
+            prior_samples = self.prior.sample((self.n_eval,))
+            prior_logps = self.prior.log_prob(prior_samples)
             for i in range(r):
-                log_probs[:,i] = torch.max(self.amortized_posterior.set_default_x(self.Xs[i,:]).log_prob(g), eps)
-            res.append(-1*torch.logsumexp(torch.sum(log_probs,-1)+ log_dt -(1-r)*logA ,0))
+                log_probs[:,i] = torch.max(self.amortized_posterior.set_default_x(self.Xs[i,:]).log_prob(prior_samples), eps)
+            res.append(-1*torch.logsumexp(torch.sum(log_probs,-1) -(1-r)*prior_logps -1*logdt ,0))
         self.log_C = torch.tensor(res).mean()
         return self.log_C
         
-    def get_log_C_adaptive(self, samples = 1000, n_reps = 10, n_rounds = 3, n_sample_each_round = 100):
-        for _ in range(n_rounds):
-            init_log_c = self.get_log_C(samples, n_reps)
-            round_samps = self.sample(n_sample_each_round, keep=False)
-            print(round_samps.max(0)[0], round_samps.min(0)[0])
-            loglens = torch.log(round_samps.max(0)[0] - round_samps.min(0)[0]) # round's lengths
-            logA = loglens.sum() # round's volume
-            log_dt = logA - torch.log(torch.tensor(n_sample_each_round)) # round's granularity
-            eps = torch.tensor(self.epsilon, dtype=torch.float32)
-            r = len(self.Xs)
-            log_probs = torch.empty((n_sample_each_round, r))
-            res = []
-            for k in range(n_reps):
-                for i in range(r):
-                    log_probs[:,i] = torch.max(self.amortized_posterior.set_default_x(self.Xs[i,:]).log_prob(round_samps), eps)
-                res.append(-1*torch.logsumexp(torch.sum(log_probs,-1)+ log_dt -(1-r)*logA ,0))
-            self.log_C = torch.tensor(res).mean()
-            print(self.log_C)
-        return self.log_C
+    # def get_log_C_adaptive(self, samples = 1000, n_reps = 10, n_rounds = 3, n_sample_each_round = 100):
+    #     for _ in range(n_rounds):
+    #         init_log_c = self.get_log_C(samples, n_reps)
+    #         round_samps = self.sample(n_sample_each_round, keep=False)
+    #         print(round_samps.max(0)[0], round_samps.min(0)[0])
+    #         loglens = torch.log(round_samps.max(0)[0] - round_samps.min(0)[0]) # round's lengths
+    #         logA = loglens.sum() # round's volume
+    #         log_dt = logA - torch.log(torch.tensor(n_sample_each_round)) # round's granularity
+    #         eps = torch.tensor(self.epsilon, dtype=torch.float32)
+    #         r = len(self.Xs)
+    #         log_probs = torch.empty((n_sample_each_round, r))
+    #         res = []
+    #         for k in range(n_reps):
+    #             for i in range(r):
+    #                 log_probs[:,i] = torch.max(self.amortized_posterior.set_default_x(self.Xs[i,:]).log_prob(round_samps), eps)
+    #             res.append(-1*torch.logsumexp(torch.sum(log_probs,-1)+ log_dt -(1-r)*logA ,0))
+    #         self.log_C = torch.tensor(res).mean()
+    #         print(self.log_C)
+    #     return self.log_C
