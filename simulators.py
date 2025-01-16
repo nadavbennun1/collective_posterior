@@ -83,16 +83,20 @@ def WF(parameters, seed=None):
     return torch.tensor(np.transpose(p_cnv)[generation.astype(int)])
 
 def wrapper(simulator, reps, parameters, seed=None):
-    evo_reps = torch.empty(reps, len(generation))
-    for i in range(reps):
-        out=simulator(parameters, seed=seed)
-        evo_reps[i,:] = out
-    return evo_reps
+    rep_1 = simulator(parameters)
+    if simulator == WF:
+        rep_1 = rep_1.reshape(1,-1)
+    out_reps = torch.empty((reps, rep_1.shape[1]))
+    out_reps[0,:] = rep_1
+    for i in range(1,reps):
+        out=simulator(parameters)
+        out_reps[i,:] = out
+    return out_reps
 
 def wrapper_hierarchical(simulator, reps, parameters, var=0.02, seed=None):
     evo_reps = torch.empty(reps, len(generation))
     for i in range(reps):
-        out=simulator(parameters+torch.normal(0, torch.abs(var*parameters)), seed=seed)
+        out=simulator(parameters+torch.normal(0, torch.abs(var*parameters)))
         evo_reps[i,:] = out
     return evo_reps
 
