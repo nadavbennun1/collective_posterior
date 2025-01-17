@@ -75,7 +75,6 @@ def evaluate_cp(posterior, thetas, n_samples):
         accus[i] = samples.mean(0)-params
         covs[i] = (cp.log_prob(samples) > cp.log_prob(params)).sum()/n_samples
         covs_old[i] = coverage_old(posterior, samples, conf_levels=[0.5,0.8,0.9,0.95], theta=thetas[i])
-        print(i)
         if i%10 == 9:
           print(f'{round(100*(i+1)/len(thetas),2)}%')
     return accus, covs, covs_old
