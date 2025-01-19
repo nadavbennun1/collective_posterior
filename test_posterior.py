@@ -71,7 +71,7 @@ def evaluate_cp(posterior, thetas, n_samples):
     accus = torch.empty(thetas.shape)
     covs = torch.empty(len(thetas),1)
     covs_old = torch.empty(len(thetas[:,0]),len(conf_levels), len(thetas[0]))
-    ig = torch.empty(len(thetas),len(conf_levels),1)
+    ig = torch.empty(len(thetas),len(conf_levels))
     
     for i in range(len(thetas)):
         if h:
