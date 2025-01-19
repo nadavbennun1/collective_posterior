@@ -59,7 +59,7 @@ def coverage_old(posterior, samples, conf_levels, theta):
     
 def info_gain(posterior, samples, conf_levels):
     prior = get_prior(sim)
-    res = torch.empty(len(conf_levels),1)
+    res = torch.empty(len(conf_levels))
     for i in range(len(conf_levels)):
         conf_level = conf_levels[i]
         ql, qh = (1-conf_level)/2, (1+conf_level)/2
@@ -96,7 +96,7 @@ def evaluate_iid(posterior, thetas, n_samples):
     accus = torch.empty(thetas.shape)
     covs = torch.empty(len(thetas),1)
     covs_old = torch.empty(len(thetas[:,0]),len(conf_levels), len(thetas[0]))
-    ig = torch.empty(len(thetas),len(conf_levels),1)
+    ig = torch.empty(len(thetas),len(conf_levels))
     
     for i in range(len(thetas)):
         if h:
@@ -118,7 +118,6 @@ add_iid = '' if c else '_iid'
 add_h = '_h' if h else ''
 add_e = '_e' if e else ''
 
-
 accus, covs, covs_old, ig = eval_func(posterior, thetas, n_samples=samples)
 covs_old = covs_old.mean(0)
 accus = accus.detach().numpy()
@@ -129,4 +128,4 @@ ig = ig.detach().numpy()
 pd.DataFrame(accus).to_csv(f'{sim}/tests/accus_{sim}{add_iid}{add_h}{add_e}.csv')
 pd.DataFrame(covs).to_csv(f'{sim}/tests/covs_{sim}{add_iid}{add_h}{add_e}.csv')
 pd.DataFrame(covs_old, index=[0.5,0.8,0.9,0.95]).to_csv(f'{sim}/tests/covs_old_{sim}{add_iid}{add_h}{add_e}.csv')
-pd.DataFrame(ig, index=[0.5,0.8,0.9,0.95]).to_csv(f'{sim}/tests/ig_{sim}{add_iid}{add_h}{add_e}.csv')
+pd.DataFrame(ig, columns=[0.5,0.8,0.9,0.95]).to_csv(f'{sim}/tests/ig_{sim}{add_iid}{add_h}{add_e}.csv')
