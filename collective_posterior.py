@@ -12,7 +12,7 @@ from seaborn import pairplot
 
 class CollectivePosterior:
        
-    def __init__(self, prior, amortized_posterior, Xs, log_C, epsilon):
+    def __init__(self, prior, amortized_posterior, Xs, log_C=1, epsilon=-10000, n_eval = int(1e5), sample_var=0.05):
         self.prior = prior # inference prior
         self.amortized_posterior = amortized_posterior
         self.Xs = Xs # Observations
@@ -21,7 +21,8 @@ class CollectivePosterior:
         self.map = None
         self.samples = []
         self.theta_dim = len(prior.base_dist.low)
-        self.n_eval = int(1e5)
+        self.n_eval = n_eval
+        self.sample_var = sample_var
     
     # Evaluate the collective posterior's log probability for a specific parameter set
     def log_prob(self, theta):
@@ -112,7 +113,7 @@ class CollectivePosterior:
         return samps[next_idx][0]
     
     def sample_around(self, theta, jump=int(1e4)):
-        dist =  torch.distributions.multivariate_normal.MultivariateNormal(theta, torch.diag(torch.tensor([0.05]*self.theta_dim)))
+        dist =  torch.distributions.multivariate_normal.MultivariateNormal(theta, torch.diag(torch.tensor([self.sample_var]*self.theta_dim)))
         cands = dist.sample((jump,))
         probs = self.log_prob(cands)
         baseline = torch.rand((len(cands),))
