@@ -23,6 +23,7 @@ parser.add_argument('-t', "--test_thetas") # test thetas directory
 parser.add_argument('-hi', "--hierarchical", action='store_true') # whether to test on hierarchical model
 parser.add_argument('-cp', "--cp", action='store_true') # whether to use collective posterior
 parser.add_argument('-e', "--ensemble", action='store_true') # whether to test on an ensemble
+parser.add_argument('-ss', "--save_samples", action='store_true') # whether to save samples
 args = parser.parse_args()
 
 
@@ -37,6 +38,7 @@ samples = int(args.samples)
 c = args.cp
 h = args.hierarchical
 e = args.ensemble
+ss = args.save_samples
 
 # Load the posterior with pickle
 posterior = pickle.load(open(posterior_dir, 'rb'))
@@ -68,20 +70,24 @@ def info_gain(posterior, samples, conf_levels):
 
 def evaluate_cp(posterior, thetas, n_samples):
     conf_levels = [0.5,0.8,0.9,0.95]
+    n_set = 10
     accus = torch.empty(thetas.shape)
     covs = torch.empty(len(thetas),1)
     covs_old = torch.empty(len(thetas[:,0]),len(conf_levels), len(thetas[0]))
     ig = torch.empty(len(thetas),len(conf_levels))
-    
+    all_samples = torch.empty(len(thetas), len(thetas[0])*n_samples)
     for i in range(len(thetas)):
         if h:
             X = wrapper_hierarchical(simulator, 10, thetas[i])
         else:
-            X = wrapper(simulator, 10, thetas[i])
+            X = wrapper(simulator, n_set, thetas[i])
         cp = CollectivePosterior(prior=get_prior(sim), amortized_posterior=posterior, log_C=1, Xs=X, epsilon=-150)
         cp.get_log_C()
         samples = cp.sample(n_samples)
         print(i)
+        if ss:
+            all_samples[i,:] = samples.T.flatten()
+            
         params = torch.tensor(thetas[i,:], dtype=torch.float32)
         accus[i] = samples.mean(0)-params
         covs[i] = (cp.log_prob(samples) > cp.log_prob(params)).sum()/n_samples
@@ -89,21 +95,25 @@ def evaluate_cp(posterior, thetas, n_samples):
         ig[i] = info_gain(posterior, samples, conf_levels)
         if i%10 == 9:
             print(f'{round(100*(i+1)/len(thetas),2)}%')
-    return accus, covs, covs_old
+    return accus, covs, covs_old, ig, all_samples
 
 def evaluate_iid(posterior, thetas, n_samples):
     conf_levels = [0.5,0.8,0.9,0.95]
+    n_set = 10
     accus = torch.empty(thetas.shape)
     covs = torch.empty(len(thetas),1)
     covs_old = torch.empty(len(thetas[:,0]),len(conf_levels), len(thetas[0]))
     ig = torch.empty(len(thetas),len(conf_levels))
-    
+    all_samples = torch.empty(len(thetas), len(thetas[0])*n_samples)
     for i in range(len(thetas)):
         if h:
-            X = wrapper_hierarchical(simulator, 10, thetas[i])
+            X = wrapper_hierarchical(simulator, n_set, thetas[i])
         else:
             X = wrapper(simulator, 10, thetas[i])
         samples = posterior.set_default_x(X).sample((n_samples,))
+        if ss:
+            all_samples[i,:] = samples.T.flatten()
+
         params = torch.tensor(thetas[i,:], dtype=torch.float32)
         accus[i] = samples.mean(0)-params
         covs[i] = (posterior.log_prob(samples) > posterior.log_prob(params)).sum()/len(thetas)
@@ -111,21 +121,25 @@ def evaluate_iid(posterior, thetas, n_samples):
         ig[i] = info_gain(posterior, samples, conf_levels)
         if i%10 == 1:
             print(f'{round(100*i/len(thetas),2)}%')
-    return accus, covs, covs_old, ig
+    return accus, covs, covs_old, ig, all_samples
 
 eval_func = evaluate_cp if c else evaluate_iid
 add_iid = '' if c else '_iid'
 add_h = '_h' if h else ''
 add_e = '_e' if e else ''
 
-accus, covs, covs_old, ig = eval_func(posterior, thetas, n_samples=samples)
+thetas = thetas[:1,:]
+
+accus, covs, covs_old, ig, all_samples = eval_func(posterior, thetas, n_samples=samples)
 covs_old = covs_old.mean(0)
 accus = accus.detach().numpy()
 covs = covs.detach().numpy()
 covs_old = covs_old.detach().numpy()
 ig = ig.detach().numpy()
+all_samples = all_samples.detach().numpy()
 
-pd.DataFrame(accus).to_csv(f'{sim}/tests/accus_{sim}{add_iid}{add_h}{add_e}.csv')
-pd.DataFrame(covs).to_csv(f'{sim}/tests/covs_{sim}{add_iid}{add_h}{add_e}.csv')
-pd.DataFrame(covs_old, index=[0.5,0.8,0.9,0.95]).to_csv(f'{sim}/tests/covs_old_{sim}{add_iid}{add_h}{add_e}.csv')
-pd.DataFrame(ig, columns=[0.5,0.8,0.9,0.95]).to_csv(f'{sim}/tests/ig_{sim}{add_iid}{add_h}{add_e}.csv')
+# pd.DataFrame(accus).to_csv(f'{sim}/tests/accus_{sim}{add_iid}{add_h}{add_e}.csv')
+# pd.DataFrame(covs).to_csv(f'{sim}/tests/covs_{sim}{add_iid}{add_h}{add_e}.csv')
+# pd.DataFrame(covs_old, index=[0.5,0.8,0.9,0.95]).to_csv(f'{sim}/tests/covs_old_{sim}{add_iid}{add_h}{add_e}.csv')
+# pd.DataFrame(ig, columns=[0.5,0.8,0.9,0.95]).to_csv(f'{sim}/tests/ig_{sim}{add_iid}{add_h}{add_e}.csv')
+pd.DataFrame(all_samples).to_csv(f'{sim}/tests/samples_{sim}{add_iid}{add_h}{add_e}.csv')
