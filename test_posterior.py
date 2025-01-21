@@ -27,6 +27,8 @@ parser.add_argument('-ss', "--save_samples", action='store_true') # whether to s
 args = parser.parse_args()
 
 
+torch.set_num_threads(48)
+
 model_dict = {'GLU': GLU, 'WF': WF, 'SLCP': SLCP}
 
 # Define the prior and simulator
@@ -71,6 +73,10 @@ def info_gain(posterior, samples, conf_levels):
 def evaluate_cp(posterior, thetas, n_samples):
     conf_levels = [0.5,0.8,0.9,0.95]
     n_set = 10
+    if sim == 'WF':
+        epsilon = -150
+    else:
+        epsilon = -10000
     accus = torch.empty(thetas.shape)
     covs = torch.empty(len(thetas),1)
     covs_old = torch.empty(len(thetas[:,0]),len(conf_levels), len(thetas[0]))
@@ -81,7 +87,7 @@ def evaluate_cp(posterior, thetas, n_samples):
             X = wrapper_hierarchical(simulator, 10, thetas[i])
         else:
             X = wrapper(simulator, n_set, thetas[i])
-        cp = CollectivePosterior(prior=get_prior(sim), amortized_posterior=posterior, log_C=1, Xs=X, epsilon=-150)
+        cp = CollectivePosterior(prior=get_prior(sim), amortized_posterior=posterior, log_C=1, Xs=X, epsilon=epsilon)
         cp.get_log_C()
         samples = cp.sample(n_samples)
         print(i)
@@ -128,8 +134,6 @@ add_iid = '' if c else '_iid'
 add_h = '_h' if h else ''
 add_e = '_e' if e else ''
 
-thetas = thetas[:1,:]
-
 accus, covs, covs_old, ig, all_samples = eval_func(posterior, thetas, n_samples=samples)
 covs_old = covs_old.mean(0)
 accus = accus.detach().numpy()
@@ -138,8 +142,8 @@ covs_old = covs_old.detach().numpy()
 ig = ig.detach().numpy()
 all_samples = all_samples.detach().numpy()
 
-# pd.DataFrame(accus).to_csv(f'{sim}/tests/accus_{sim}{add_iid}{add_h}{add_e}.csv')
-# pd.DataFrame(covs).to_csv(f'{sim}/tests/covs_{sim}{add_iid}{add_h}{add_e}.csv')
-# pd.DataFrame(covs_old, index=[0.5,0.8,0.9,0.95]).to_csv(f'{sim}/tests/covs_old_{sim}{add_iid}{add_h}{add_e}.csv')
-# pd.DataFrame(ig, columns=[0.5,0.8,0.9,0.95]).to_csv(f'{sim}/tests/ig_{sim}{add_iid}{add_h}{add_e}.csv')
+pd.DataFrame(accus).to_csv(f'{sim}/tests/accus_{sim}{add_iid}{add_h}{add_e}.csv')
+pd.DataFrame(covs).to_csv(f'{sim}/tests/covs_{sim}{add_iid}{add_h}{add_e}.csv')
+pd.DataFrame(covs_old, index=[0.5,0.8,0.9,0.95]).to_csv(f'{sim}/tests/covs_old_{sim}{add_iid}{add_h}{add_e}.csv')
+pd.DataFrame(ig, columns=[0.5,0.8,0.9,0.95]).to_csv(f'{sim}/tests/ig_{sim}{add_iid}{add_h}{add_e}.csv')
 pd.DataFrame(all_samples).to_csv(f'{sim}/tests/samples_{sim}{add_iid}{add_h}{add_e}.csv')
