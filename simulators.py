@@ -79,8 +79,9 @@ def WF(parameters, seed=None):
         p = E @ p.reshape((4, 1))  # natural selection + mutation        
         p /= p.sum()  # rescale proportions
         n = np.random.multinomial(N, np.ndarray.flatten(p)) # random genetic drift
-    
-    return torch.tensor(np.transpose(p_cnv)[generation.astype(int)])
+    ret = np.transpose(p_cnv)[generation.astype(int)]
+    noise = np.random.normal(0,0.02,size=ret.shape)
+    return torch.tensor(ret)
 
 def wrapper(simulator, reps, parameters, seed=None):
     rep_1 = simulator(parameters)
