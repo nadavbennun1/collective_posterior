@@ -101,7 +101,7 @@ class CollectivePosterior:
             while cur < n_samples:
                 samps = self.prior.sample((jump,))
                 prior_probs = self.prior.log_prob(samps)
-                probs = torch.rand(samps.size()[0])
+                probs = torch.log(torch.rand(samps.size()[0]))
                 lp = self.log_prob(samps)
                 next_idx = lp - prior_probs > probs
                 samples_to_add = samps[next_idx]
@@ -110,9 +110,9 @@ class CollectivePosterior:
                 pbar.update(next_idx.sum().item())  # Update the progress bar
 
         if keep:
-            self.samples = samples[1:n_samples]
+            self.samples = samples[1:n_samples+1]
 
-        return samples[1:n_samples]
+        return samples[1:n_samples+1]
     
 
 
@@ -232,7 +232,10 @@ class CollectivePosterior:
         Returns:
             torch.Tensor: MAP estimate of the posterior mode.
         """
-        func = lambda theta: np.array(-1*self.log_prob(theta)) # max(log_prob) = min(-log_prob) + np array for optimizer
+        if len(self.posterior_list) > 0:
+            func = lambda theta: np.array(-1*self.log_prob(theta)).reshape(1,-1) 
+        else:
+            func = lambda theta: np.array(-1*self.log_prob(theta)) # max(log_prob) = min(-log_prob) + np array for optimizer
         if len(self.samples) > 0:
             x0 = self.samples[0,:]
         else:
@@ -267,7 +270,7 @@ class CollectivePosterior:
                 if self.amortized_posterior: # amortized posterior
                     log_probs[:,i] = torch.max(eps,self.amortized_posterior.set_default_x(self.Xs[i,:]).log_prob(prior_samples))
                 else: # posterior log-prob function only takes theta
-                    log_probs[:,i] = torch.max(eps,self.posterior_list[i](prior_samples).reshape(len(prior_samples,)))
+                    log_probs[:,i] = torch.max(eps,self.posterior_list[i](prior_samples))
                     # log_probs[:,i] = torch.max(self.amortized_posterior.set_default_x(self.Xs[i,:]).log_prob(prior_samples), eps)
             res.append(-1*torch.logsumexp(torch.sum(log_probs,-1) -(1-r)*prior_logps -1*logdt ,0))
         self.log_C = torch.tensor(res).mean()
