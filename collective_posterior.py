@@ -77,12 +77,12 @@ class CollectivePosterior:
         logpr = self.prior.log_prob(theta).reshape(theta_size,)
         return log_probs.sum(axis=1) + self.log_C - (1-r)*logpr # log rules
     
-    def sample(self, n_samples, jump=int(1e5), keep=True, method='rejection'):
+    def sample(self, n_samples, jump=int(1e4), keep=True, method='rejection'):
         method_dict = {'rejection': self.rejection_sample,'unimodal': self.sample_unimodal}
         return method_dict[method](n_samples, jump, keep)
         
     
-    def rejection_sample(self, n_samples, jump=int(1e5), keep=True):
+    def rejection_sample(self, n_samples, jump=int(1e4), keep=True):
         """
         Sample from the collective posterior using rejection sampling.
 

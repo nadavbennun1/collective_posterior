@@ -27,8 +27,6 @@ parser.add_argument('-ss', "--save_samples", action='store_true') # whether to s
 args = parser.parse_args()
 
 
-torch.set_num_threads(48)
-
 model_dict = {'GLU': GLU, 'WF': WF, 'SLCP': SLCP}
 
 # Define the prior and simulator
@@ -89,7 +87,7 @@ def evaluate_cp(posterior, thetas, n_samples):
             X = wrapper(simulator, n_set, thetas[i])
         cp = CollectivePosterior(prior=get_prior(sim), amortized_posterior=posterior, log_C=1, Xs=X, epsilon=epsilon)
         cp.get_log_C()
-        samples = cp.sample(n_samples)
+        samples = cp.sample(n_samples, jump=int(1e5))
         print(i)
         if ss:
             all_samples[i,:] = samples.T.flatten()
